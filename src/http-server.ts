@@ -29,7 +29,7 @@ import { registerShippingTools } from "./tools/shipping.js";
 import { registerAuxiliaryTools } from "./tools/auxiliary.js";
 
 // Configuration
-const PORT = parseInt(process.env.PORT || "6024");
+const PORT = parseInt(process.env.PORT || "3000");
 const HOST = process.env.HOST || "0.0.0.0";
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || ["*"];
 

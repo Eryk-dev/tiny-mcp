@@ -41,15 +41,15 @@ USER mcp
 
 # Environment variables
 ENV NODE_ENV=production
-ENV PORT=6024
+ENV PORT=3000
 ENV HOST=0.0.0.0
 
 # Expose port
-EXPOSE 6024
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:6024/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 
 # Start HTTP server
 CMD ["node", "dist/http-server.js"]
