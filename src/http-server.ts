@@ -3,7 +3,7 @@
  * HTTP Server for Tiny ERP MCP Server (Cloud Deployment)
  *
  * Implements the MCP Streamable HTTP transport for cloud deployment.
- * Supports both POST (client messages) and GET (SSE streams) methods.
+ * Uses stateless mode - each request is independent.
  *
  * Usage:
  *   npx tiny-mcp-http                    # Start HTTP server on port 3000
@@ -11,9 +11,8 @@
  */
 
 import http from "http";
-import { randomUUID } from "crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { initializeApiClient } from "./services/api-client.js";
 
 // Import tool registration functions
@@ -31,21 +30,6 @@ import { registerAuxiliaryTools } from "./tools/auxiliary.js";
 // Configuration
 const PORT = parseInt(process.env.PORT || "3000");
 const HOST = process.env.HOST || "0.0.0.0";
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || ["*"];
-
-// Session management
-interface Session {
-  id: string;
-  server: McpServer;
-  transport: SSEServerTransport;
-  createdAt: number;
-  lastActivity: number;
-}
-
-const sessions = new Map<string, Session>();
-
-// Session timeout (30 minutes of inactivity)
-const SESSION_TIMEOUT = 30 * 60 * 1000;
 
 /**
  * Create a new MCP server instance with all tools registered
@@ -72,66 +56,20 @@ function createMcpServer(): McpServer {
 }
 
 /**
- * Validate Origin header for security
+ * Send JSON response
  */
-function validateOrigin(origin: string | undefined): boolean {
-  if (ALLOWED_ORIGINS.includes("*")) {
-    return true;
-  }
-  if (!origin) {
-    return false;
-  }
-  return ALLOWED_ORIGINS.includes(origin);
-}
-
-/**
- * Clean up expired sessions
- */
-function cleanupSessions(): void {
-  const now = Date.now();
-  for (const [sessionId, session] of sessions) {
-    if (now - session.lastActivity > SESSION_TIMEOUT) {
-      console.log(`Cleaning up expired session: ${sessionId}`);
-      sessions.delete(sessionId);
-    }
-  }
-}
-
-// Run cleanup every 5 minutes
-setInterval(cleanupSessions, 5 * 60 * 1000);
-
-/**
- * Handle CORS preflight requests
- */
-function handleCors(
-  req: http.IncomingMessage,
-  res: http.ServerResponse
-): boolean {
-  const origin = req.headers.origin;
-
-  // Set CORS headers
-  if (origin && validateOrigin(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else if (ALLOWED_ORIGINS.includes("*")) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-  }
-
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Mcp-Session-Id, Authorization"
-  );
-  res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
-  res.setHeader("Access-Control-Max-Age", "86400");
-
-  // Handle preflight
-  if (req.method === "OPTIONS") {
-    res.writeHead(204);
-    res.end();
-    return true;
-  }
-
-  return false;
+function sendJson(
+  res: http.ServerResponse,
+  status: number,
+  data: unknown
+): void {
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Accept",
+  });
+  res.end(JSON.stringify(data));
 }
 
 /**
@@ -155,31 +93,6 @@ async function parseBody(req: http.IncomingMessage): Promise<unknown> {
 }
 
 /**
- * Send JSON response
- */
-function sendJson(
-  res: http.ServerResponse,
-  status: number,
-  data: unknown
-): void {
-  res.writeHead(status, {
-    "Content-Type": "application/json",
-  });
-  res.end(JSON.stringify(data));
-}
-
-/**
- * Send error response
- */
-function sendError(
-  res: http.ServerResponse,
-  status: number,
-  message: string
-): void {
-  sendJson(res, status, { error: message });
-}
-
-/**
  * Main HTTP request handler
  */
 async function handleRequest(
@@ -188,14 +101,15 @@ async function handleRequest(
 ): Promise<void> {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
-  // Handle CORS
-  if (handleCors(req, res)) {
-    return;
-  }
-
-  // Validate origin for non-GET requests
-  if (req.method !== "GET" && !validateOrigin(req.headers.origin)) {
-    sendError(res, 403, "Invalid origin");
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Accept",
+      "Access-Control-Max-Age": "86400",
+    });
+    res.end();
     return;
   }
 
@@ -207,8 +121,8 @@ async function handleRequest(
       status: "running",
       endpoints: {
         health: "/health",
-        mcp: "/mcp"
-      }
+        mcp: "/mcp",
+      },
     });
     return;
   }
@@ -219,103 +133,68 @@ async function handleRequest(
       status: "healthy",
       service: "tiny-mcp-server",
       timestamp: new Date().toISOString(),
-      activeSessions: sessions.size,
     });
     return;
   }
 
-  // MCP endpoint
-  if (url.pathname === "/mcp" || url.pathname === "/sse") {
-    const sessionId = req.headers["mcp-session-id"] as string | undefined;
-
-    // GET - Start SSE stream for server-to-client messages
-    if (req.method === "GET") {
-      // Create new session
-      const newSessionId = randomUUID();
-      const server = createMcpServer();
-      const transport = new SSEServerTransport("/mcp", res);
-
-      const session: Session = {
-        id: newSessionId,
-        server,
-        transport,
-        createdAt: Date.now(),
-        lastActivity: Date.now(),
-      };
-
-      sessions.set(newSessionId, session);
-
-      // Set session header
-      res.setHeader("Mcp-Session-Id", newSessionId);
-
-      console.log(`New session created: ${newSessionId}`);
-
-      // Connect server to transport
-      await server.connect(transport);
-
-      // Clean up on close
-      req.on("close", () => {
-        console.log(`Session closed: ${newSessionId}`);
-        sessions.delete(newSessionId);
-      });
-
-      return;
-    }
-
-    // POST - Handle client-to-server messages
+  // MCP endpoint - POST only (stateless)
+  if (url.pathname === "/mcp") {
     if (req.method === "POST") {
-      if (!sessionId) {
-        sendError(res, 400, "Missing Mcp-Session-Id header");
-        return;
-      }
-
-      const session = sessions.get(sessionId);
-      if (!session) {
-        sendError(res, 404, "Session not found");
-        return;
-      }
-
-      // Update last activity
-      session.lastActivity = Date.now();
+      // Create a fresh server and transport for each request (stateless)
+      const server = createMcpServer();
 
       try {
+        // Create stateless transport (sessionIdGenerator: undefined)
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+        });
+
+        // Connect server to transport
+        await server.connect(transport);
+
+        // Parse the request body
         const body = await parseBody(req);
 
-        // Forward message to transport
-        await session.transport.handlePostMessage(req, res, body);
-      } catch (error) {
-        console.error("Error handling POST:", error);
-        sendError(
-          res,
-          500,
-          error instanceof Error ? error.message : "Internal error"
-        );
-      }
+        // Handle the request
+        await transport.handleRequest(req, res, body);
 
+        // Clean up when response is finished
+        res.on("close", () => {
+          transport.close();
+          server.close();
+        });
+      } catch (error) {
+        console.error("Error handling MCP request:", error);
+        if (!res.headersSent) {
+          sendJson(res, 500, {
+            jsonrpc: "2.0",
+            error: {
+              code: -32603,
+              message: "Internal server error",
+            },
+            id: null,
+          });
+        }
+      }
       return;
     }
 
-    // DELETE - Close session
-    if (req.method === "DELETE") {
-      if (!sessionId) {
-        sendError(res, 400, "Missing Mcp-Session-Id header");
-        return;
-      }
-
-      const session = sessions.get(sessionId);
-      if (session) {
-        sessions.delete(sessionId);
-        console.log(`Session deleted: ${sessionId}`);
-      }
-
-      res.writeHead(204);
-      res.end();
+    // GET and DELETE not supported in stateless mode
+    if (req.method === "GET" || req.method === "DELETE") {
+      sendJson(res, 405, {
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Method not allowed. Use POST for stateless MCP requests.",
+        },
+        id: null,
+      });
       return;
     }
   }
 
   // Not found
-  sendError(res, 404, "Not found");
+  sendJson(res, 404, { error: "Not found" });
 }
 
 /**
@@ -323,30 +202,32 @@ async function handleRequest(
  */
 async function main(): Promise<void> {
   console.log(`\n========================================`);
-  console.log(`🚀 Tiny ERP MCP HTTP Server - Starting`);
+  console.log(`Tiny ERP MCP HTTP Server - Starting`);
   console.log(`========================================\n`);
   console.log(`[${new Date().toISOString()}] Initializing server...`);
 
   // Log environment
-  console.log(`\n📋 Configuration:`);
+  console.log(`\nConfiguration:`);
   console.log(`   PORT: ${PORT}`);
   console.log(`   HOST: ${HOST}`);
-  console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   ALLOWED_ORIGINS: ${ALLOWED_ORIGINS.join(', ')}`);
+  console.log(`   NODE_ENV: ${process.env.NODE_ENV || "development"}`);
+  console.log(`   Mode: Stateless HTTP`);
 
   // Check for OAuth credentials
   const clientId = process.env.TINY_CLIENT_ID;
   const clientSecret = process.env.TINY_CLIENT_SECRET;
   const hasTokens = !!process.env.TINY_TOKENS;
 
-  console.log(`\n🔐 OAuth Status:`);
-  console.log(`   TINY_CLIENT_ID: ${clientId ? '✅ Set' : '❌ Missing'}`);
-  console.log(`   TINY_CLIENT_SECRET: ${clientSecret ? '✅ Set' : '❌ Missing'}`);
-  console.log(`   TINY_TOKENS: ${hasTokens ? '✅ Set' : '⚠️  Not set (will use file)'}`);
+  console.log(`\nOAuth Status:`);
+  console.log(`   TINY_CLIENT_ID: ${clientId ? "Set" : "Missing"}`);
+  console.log(`   TINY_CLIENT_SECRET: ${clientSecret ? "Set" : "Missing"}`);
+  console.log(`   TINY_TOKENS: ${hasTokens ? "Set" : "Not set (will use file)"}`);
 
   if (!clientId || !clientSecret) {
-    console.warn(`\n⚠️  OAuth credentials not configured.`);
-    console.warn(`   API calls will fail until TINY_CLIENT_ID and TINY_CLIENT_SECRET are set.`);
+    console.warn(`\nOAuth credentials not configured.`);
+    console.warn(
+      `   API calls will fail until TINY_CLIENT_ID and TINY_CLIENT_SECRET are set.`
+    );
   }
 
   // Initialize API client
@@ -362,22 +243,23 @@ async function main(): Promise<void> {
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Request error:`, error);
       if (!res.headersSent) {
-        sendError(res, 500, "Internal server error");
+        sendJson(res, 500, { error: "Internal server error" });
       }
     }
   });
 
   // Start server
-  console.log(`[${new Date().toISOString()}] Starting server on ${HOST}:${PORT}...`);
+  console.log(
+    `[${new Date().toISOString()}] Starting server on ${HOST}:${PORT}...`
+  );
   server.listen(PORT, HOST, () => {
     console.log(`\n========================================`);
-    console.log(`✅ Server running at http://${HOST}:${PORT}`);
+    console.log(`Server running at http://${HOST}:${PORT}`);
     console.log(`========================================`);
-    console.log(`\n📡 Endpoints:`);
+    console.log(`\nEndpoints:`);
+    console.log(`   GET  /        - Server info`);
     console.log(`   GET  /health  - Health check`);
-    console.log(`   GET  /mcp     - Start SSE session`);
-    console.log(`   POST /mcp     - Send message to session`);
-    console.log(`   DELETE /mcp   - Close session`);
+    console.log(`   POST /mcp     - MCP requests (stateless)`);
     console.log(`\n[${new Date().toISOString()}] Ready for connections!\n`);
   });
 
