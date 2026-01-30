@@ -90,8 +90,11 @@ const GetStockInputSchema = z.object({
 
 const UpdateStockInputSchema = z.object({
   idProduto: z.number().int().positive().describe("ID do produto"),
-  quantidade: z.number().describe("Quantidade a adicionar (positivo) ou remover (negativo)"),
-  observacao: z.string().max(500).optional().describe("Observação do movimento")
+  tipo: z.enum(["E", "S", "B"]).describe("Tipo de movimento: E (Entrada), S (Saída), B (Balanço)"),
+  quantidade: z.number().positive().describe("Quantidade do movimento (sempre positivo)"),
+  precoUnitario: z.number().min(0).optional().describe("Preço unitário do movimento"),
+  idDeposito: z.number().int().positive().optional().describe("ID do depósito (opcional)"),
+  observacoes: z.string().max(500).optional().describe("Observação do movimento")
 }).strict();
 
 const GetProductKitInputSchema = z.object({
@@ -472,10 +475,19 @@ Retorna:
     "tiny_update_stock",
     {
       title: "Atualizar Estoque",
-      description: `Adiciona ou remove quantidade do estoque de um produto.
+      description: `Movimenta o estoque de um produto.
 
-Use quantidade positiva para adicionar e negativa para remover.
-Opcionalmente inclua uma observação para o movimento.`,
+Tipos de movimento:
+- E: Entrada (adiciona ao estoque)
+- S: Saída (remove do estoque)
+- B: Balanço (ajuste para valor específico)
+
+Parâmetros:
+- tipo: E, S ou B
+- quantidade: valor positivo
+- precoUnitario: preço unitário (opcional, padrão 0)
+- idDeposito: ID do depósito (opcional)
+- observacoes: observação do movimento (opcional)`,
       inputSchema: UpdateStockInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -486,12 +498,21 @@ Opcionalmente inclua uma observação para o movimento.`,
     },
     async (params: z.infer<typeof UpdateStockInputSchema>) => {
       try {
-        const { idProduto, ...data } = params;
-        await apiPut(`/estoque/${idProduto}`, data);
-        const action = params.quantidade >= 0 ? "adicionada" : "removida";
+        const { idProduto, idDeposito, ...rest } = params;
+        const data: Record<string, unknown> = {
+          tipo: rest.tipo,
+          quantidade: rest.quantidade,
+          precoUnitario: rest.precoUnitario ?? 0,
+        };
+        if (rest.observacoes) data.observacoes = rest.observacoes;
+        if (idDeposito) data.deposito = { id: idDeposito };
+
+        await apiPost(`/estoque/${idProduto}`, data);
+
+        const tipoDesc = rest.tipo === "E" ? "Entrada" : rest.tipo === "S" ? "Saída" : "Balanço";
         return {
-          content: [{ type: "text", text: formatSuccess(`Quantidade ${action} do estoque do produto ${idProduto}`) }],
-          structuredContent: toStructuredContent({ id: idProduto, success: true })
+          content: [{ type: "text", text: formatSuccess(`${tipoDesc} de ${rest.quantidade} unidades no estoque do produto ${idProduto}`) }],
+          structuredContent: toStructuredContent({ id: idProduto, success: true, tipo: rest.tipo, quantidade: rest.quantidade })
         };
       } catch (error) {
         return { content: [{ type: "text", text: handleApiError(error) }] };
