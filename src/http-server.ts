@@ -308,24 +308,45 @@ async function handleRequest(
  * Start the HTTP server
  */
 async function main(): Promise<void> {
-  // Check for OAuth credentials (warn but don't crash)
+  console.log(`\n========================================`);
+  console.log(`🚀 Tiny ERP MCP HTTP Server - Starting`);
+  console.log(`========================================\n`);
+  console.log(`[${new Date().toISOString()}] Initializing server...`);
+
+  // Log environment
+  console.log(`\n📋 Configuration:`);
+  console.log(`   PORT: ${PORT}`);
+  console.log(`   HOST: ${HOST}`);
+  console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`   ALLOWED_ORIGINS: ${ALLOWED_ORIGINS.join(', ')}`);
+
+  // Check for OAuth credentials
   const clientId = process.env.TINY_CLIENT_ID;
   const clientSecret = process.env.TINY_CLIENT_SECRET;
+  const hasTokens = !!process.env.TINY_TOKENS;
+
+  console.log(`\n🔐 OAuth Status:`);
+  console.log(`   TINY_CLIENT_ID: ${clientId ? '✅ Set' : '❌ Missing'}`);
+  console.log(`   TINY_CLIENT_SECRET: ${clientSecret ? '✅ Set' : '❌ Missing'}`);
+  console.log(`   TINY_TOKENS: ${hasTokens ? '✅ Set' : '⚠️  Not set (will use file)'}`);
 
   if (!clientId || !clientSecret) {
-    console.warn("⚠️  TINY_CLIENT_ID e/ou TINY_CLIENT_SECRET não configurados.");
-    console.warn("As ferramentas do Tiny ERP não funcionarão até configurar as credenciais.");
+    console.warn(`\n⚠️  OAuth credentials not configured.`);
+    console.warn(`   API calls will fail until TINY_CLIENT_ID and TINY_CLIENT_SECRET are set.`);
   }
 
   // Initialize API client
+  console.log(`\n[${new Date().toISOString()}] Initializing API client...`);
   initializeApiClient();
+  console.log(`[${new Date().toISOString()}] API client initialized.`);
 
   // Create HTTP server
+  console.log(`[${new Date().toISOString()}] Creating HTTP server...`);
   const server = http.createServer(async (req, res) => {
     try {
       await handleRequest(req, res);
     } catch (error) {
-      console.error("Request error:", error);
+      console.error(`[${new Date().toISOString()}] Request error:`, error);
       if (!res.headersSent) {
         sendError(res, 500, "Internal server error");
       }
@@ -333,22 +354,17 @@ async function main(): Promise<void> {
   });
 
   // Start server
+  console.log(`[${new Date().toISOString()}] Starting server on ${HOST}:${PORT}...`);
   server.listen(PORT, HOST, () => {
-    console.log(`\n🚀 Tiny ERP MCP HTTP Server`);
-    console.log(`===========================\n`);
-    console.log(`Server running at http://${HOST}:${PORT}`);
-    console.log(`\nEndpoints:`);
-    console.log(`  GET  /health  - Health check`);
-    console.log(`  GET  /mcp     - Start SSE session`);
-    console.log(`  POST /mcp     - Send message to session`);
-    console.log(`  DELETE /mcp   - Close session`);
-    console.log(`\nEnvironment variables:`);
-    console.log(`  PORT            - Server port (default: 6024)`);
-    console.log(`  HOST            - Server host (default: 0.0.0.0)`);
-    console.log(`  ALLOWED_ORIGINS - Comma-separated allowed origins (default: *)`);
-    console.log(`  TINY_CLIENT_ID  - OAuth client ID`);
-    console.log(`  TINY_CLIENT_SECRET - OAuth client secret`);
-    console.log(`\n✅ Ready for connections\n`);
+    console.log(`\n========================================`);
+    console.log(`✅ Server running at http://${HOST}:${PORT}`);
+    console.log(`========================================`);
+    console.log(`\n📡 Endpoints:`);
+    console.log(`   GET  /health  - Health check`);
+    console.log(`   GET  /mcp     - Start SSE session`);
+    console.log(`   POST /mcp     - Send message to session`);
+    console.log(`   DELETE /mcp   - Close session`);
+    console.log(`\n[${new Date().toISOString()}] Ready for connections!\n`);
   });
 
   // Graceful shutdown
