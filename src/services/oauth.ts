@@ -57,23 +57,52 @@ function getTokenFilePath(): string {
 }
 
 /**
- * Save tokens to file
+ * Save tokens to memory and file
  */
 export function saveTokens(tokens: OAuthTokens): void {
-  const filePath = getTokenFilePath();
-
   // Add expiration timestamps
   const now = Date.now();
   tokens.access_token_expires_at = now + (tokens.expires_in * 1000);
   tokens.refresh_token_expires_at = now + (tokens.refresh_expires_in * 1000);
 
-  fs.writeFileSync(filePath, JSON.stringify(tokens, null, 2), "utf-8");
+  // Always save to memory (for cloud deployments)
+  memoryTokens = tokens;
+
+  // Try to save to file (may fail in cloud environments)
+  try {
+    const filePath = getTokenFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(tokens, null, 2), "utf-8");
+  } catch {
+    // Ignore file write errors in cloud environments
+    console.warn("⚠️  Não foi possível salvar tokens em arquivo (ambiente cloud)");
+  }
 }
 
+// In-memory token cache (for cloud deployments)
+let memoryTokens: OAuthTokens | null = null;
+
 /**
- * Load tokens from file
+ * Load tokens from environment variable, memory, or file
  */
 export function loadTokens(): OAuthTokens | null {
+  // 1. Check memory cache first (for refreshed tokens)
+  if (memoryTokens) {
+    return memoryTokens;
+  }
+
+  // 2. Check environment variable (for cloud deployments)
+  const envTokens = process.env.TINY_TOKENS;
+  if (envTokens) {
+    try {
+      const tokens = JSON.parse(envTokens) as OAuthTokens;
+      memoryTokens = tokens;
+      return tokens;
+    } catch {
+      console.error("⚠️  TINY_TOKENS inválido (JSON malformado)");
+    }
+  }
+
+  // 3. Fall back to file
   const filePath = getTokenFilePath();
 
   if (!fs.existsSync(filePath)) {
@@ -92,9 +121,17 @@ export function loadTokens(): OAuthTokens | null {
  * Delete stored tokens
  */
 export function clearTokens(): void {
-  const filePath = getTokenFilePath();
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  // Clear memory cache
+  memoryTokens = null;
+
+  // Try to delete file
+  try {
+    const filePath = getTokenFilePath();
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch {
+    // Ignore file delete errors
   }
 }
 
