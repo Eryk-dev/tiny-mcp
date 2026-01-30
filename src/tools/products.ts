@@ -266,7 +266,7 @@ Retorna lista paginada com informações básicas de cada produto.`,
         };
 
         if (params.nome) queryParams.nome = params.nome;
-        if (params.sku) queryParams.sku = params.sku;
+        if (params.sku) queryParams.codigo = params.sku; // API usa 'codigo' para SKU
         if (params.gtin) queryParams.gtin = params.gtin;
         if (params.situacao) queryParams.situacao = params.situacao;
         if (params.tipo) queryParams.tipo = params.tipo;
