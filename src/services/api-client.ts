@@ -185,6 +185,9 @@ export function handleApiError(error: unknown): string {
         errorMsg = data.error;
       } else if (data?.errors && data.errors.length > 0) {
         errorMsg = data.errors.map((e) => e.message).join("; ");
+      } else if (data) {
+        // Log full response for debugging
+        errorMsg = JSON.stringify(data);
       }
 
       switch (status) {
