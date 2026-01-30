@@ -22,9 +22,9 @@ import type { Product, Stock } from "../types.js";
 // ============================================================================
 
 const ListProductsInputSchema = z.object({
+  sku: z.string().max(50).optional().describe("Filtrar por SKU (código do produto) - USE ESTE para buscar produtos por código"),
   nome: z.string().max(200).optional().describe("Filtrar por nome do produto"),
-  sku: z.string().max(50).optional().describe("Filtrar por SKU"),
-  gtin: z.string().max(20).optional().describe("Filtrar por código de barras (GTIN/EAN)"),
+  gtin: z.string().max(20).optional().describe("Filtrar por código de barras EAN/GTIN (apenas se explicitamente solicitado)"),
   situacao: z.enum(["ativo", "inativo"]).optional().describe("Filtrar por situação: ativo ou inativo"),
   tipo: z.enum(["produto", "servico", "kit"]).optional().describe("Filtrar por tipo: produto, servico ou kit"),
   idCategoria: z.number().int().positive().optional().describe("Filtrar por ID da categoria"),
@@ -230,10 +230,13 @@ export function registerProductTools(server: McpServer): void {
       title: "Listar Produtos",
       description: `Lista produtos do Tiny ERP com filtros e paginação.
 
+IMPORTANTE: Quando o usuário pedir um produto por código (ex: "007672"), use o parâmetro SKU.
+O SKU é o código principal de identificação dos produtos no sistema.
+
 Parâmetros de filtro:
+- sku: Filtrar por SKU (código do produto) - USE ESTE PARA BUSCAR POR CÓDIGO
 - nome: Filtrar por nome
-- sku: Filtrar por SKU
-- gtin: Filtrar por código de barras
+- gtin: Filtrar por código de barras EAN/GTIN (apenas se explicitamente solicitado)
 - situacao: ativo ou inativo
 - tipo: produto, servico ou kit
 - idCategoria: ID da categoria
