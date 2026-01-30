@@ -88,12 +88,15 @@ const GetStockInputSchema = z.object({
   response_format: ResponseFormatSchema
 }).strict();
 
+// Depósito padrão: CWB
+const DEPOSITO_PADRAO_ID = 653728712;
+
 const UpdateStockInputSchema = z.object({
   idProduto: z.number().int().positive().describe("ID do produto"),
   tipo: z.enum(["E", "S", "B"]).describe("Tipo de movimento: E (Entrada), S (Saída), B (Balanço)"),
   quantidade: z.number().positive().describe("Quantidade do movimento (sempre positivo)"),
   precoUnitario: z.number().min(0).optional().describe("Preço unitário do movimento"),
-  idDeposito: z.number().int().positive().optional().describe("ID do depósito (opcional)"),
+  idDeposito: z.number().int().positive().optional().describe("ID do depósito (padrão: CWB)"),
   observacoes: z.string().max(500).optional().describe("Observação do movimento")
 }).strict();
 
@@ -486,8 +489,10 @@ Parâmetros:
 - tipo: E, S ou B
 - quantidade: valor positivo
 - precoUnitario: preço unitário (opcional, padrão 0)
-- idDeposito: ID do depósito (opcional)
-- observacoes: observação do movimento (opcional)`,
+- idDeposito: ID do depósito (opcional, padrão: CWB)
+- observacoes: observação do movimento (opcional)
+
+O depósito padrão é CWB (653728712).`,
       inputSchema: UpdateStockInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -499,13 +504,14 @@ Parâmetros:
     async (params: z.infer<typeof UpdateStockInputSchema>) => {
       try {
         const { idProduto, idDeposito, ...rest } = params;
+        const depositoId = idDeposito ?? DEPOSITO_PADRAO_ID;
         const data: Record<string, unknown> = {
           tipo: rest.tipo,
           quantidade: rest.quantidade,
           precoUnitario: rest.precoUnitario ?? 0,
+          deposito: { id: depositoId },
         };
         if (rest.observacoes) data.observacoes = rest.observacoes;
-        if (idDeposito) data.deposito = { id: idDeposito };
 
         await apiPost(`/estoque/${idProduto}`, data);
 
