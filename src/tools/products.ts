@@ -74,7 +74,8 @@ const UpdateProductInputSchema = z.object({
   ncm: z.string().max(10).optional().describe("Código NCM"),
   descricao: z.string().max(5000).optional().describe("Descrição completa"),
   descricaoCurta: z.string().max(500).optional().describe("Descrição curta"),
-  situacao: z.enum(["ativo", "inativo"]).optional().describe("Situação do produto")
+  situacao: z.enum(["ativo", "inativo"]).optional().describe("Situação do produto"),
+  localizacao: z.string().max(100).optional().describe("Localização no estoque")
 }).strict();
 
 const UpdateProductPriceInputSchema = z.object({
@@ -390,7 +391,14 @@ Campos não informados mantêm seus valores atuais.`,
     },
     async (params: z.infer<typeof UpdateProductInputSchema>) => {
       try {
-        const { idProduto, ...data } = params;
+        const { idProduto, localizacao, ...rest } = params;
+        const data: Record<string, unknown> = { ...rest };
+
+        // Localização vai dentro do objeto estoque
+        if (localizacao !== undefined) {
+          data.estoque = { localizacao };
+        }
+
         await apiPut(`/produtos/${idProduto}`, data);
         return {
           content: [{ type: "text", text: formatSuccess(`Produto ${idProduto} atualizado com sucesso`) }],
