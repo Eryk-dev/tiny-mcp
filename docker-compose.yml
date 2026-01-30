@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  tiny-mcp-server:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - ALLOWED_ORIGINS=*
+      - TINY_CLIENT_ID=${TINY_CLIENT_ID}
+      - TINY_CLIENT_SECRET=${TINY_CLIENT_SECRET}
+    volumes:
+      # Persist tokens between restarts (optional)
+      - tiny-mcp-tokens:/home/mcp/.tiny-mcp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  tiny-mcp-tokens:
