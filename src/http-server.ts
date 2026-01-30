@@ -308,6 +308,15 @@ async function handleRequest(
  * Start the HTTP server
  */
 async function main(): Promise<void> {
+  // Check for OAuth credentials (warn but don't crash)
+  const clientId = process.env.TINY_CLIENT_ID;
+  const clientSecret = process.env.TINY_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.warn("⚠️  TINY_CLIENT_ID e/ou TINY_CLIENT_SECRET não configurados.");
+    console.warn("As ferramentas do Tiny ERP não funcionarão até configurar as credenciais.");
+  }
+
   // Initialize API client
   initializeApiClient();
 
