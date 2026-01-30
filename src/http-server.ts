@@ -29,7 +29,7 @@ import { registerShippingTools } from "./tools/shipping.js";
 import { registerAuxiliaryTools } from "./tools/auxiliary.js";
 
 // Configuration
-const PORT = parseInt(process.env.PORT || "3000");
+const PORT = parseInt(process.env.PORT || "6024");
 const HOST = process.env.HOST || "0.0.0.0";
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || ["*"];
 
@@ -343,7 +343,7 @@ async function main(): Promise<void> {
     console.log(`  POST /mcp     - Send message to session`);
     console.log(`  DELETE /mcp   - Close session`);
     console.log(`\nEnvironment variables:`);
-    console.log(`  PORT            - Server port (default: 3000)`);
+    console.log(`  PORT            - Server port (default: 6024)`);
     console.log(`  HOST            - Server host (default: 0.0.0.0)`);
     console.log(`  ALLOWED_ORIGINS - Comma-separated allowed origins (default: *)`);
     console.log(`  TINY_CLIENT_ID  - OAuth client ID`);
