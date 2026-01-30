@@ -343,7 +343,7 @@ async function main(): Promise<void> {
     console.log(`  POST /mcp     - Send message to session`);
     console.log(`  DELETE /mcp   - Close session`);
     console.log(`\nEnvironment variables:`);
-    console.log(`  PORT            - Server port (default: 3000)`);
+    console.log(`  PORT            - Server port (default: 3141)`);
     console.log(`  HOST            - Server host (default: 0.0.0.0)`);
     console.log(`  ALLOWED_ORIGINS - Comma-separated allowed origins (default: *)`);
     console.log(`  TINY_CLIENT_ID  - OAuth client ID`);
