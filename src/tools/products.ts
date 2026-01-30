@@ -445,7 +445,7 @@ Retorna:
     },
     async (params: z.infer<typeof GetStockInputSchema>) => {
       try {
-        const stock = await apiGet<Stock>(`/estoques/${params.idProduto}`);
+        const stock = await apiGet<Stock>(`/estoque/${params.idProduto}`);
 
         const { text, structured } = formatItemResponse(
           "Estoque",
@@ -484,7 +484,7 @@ Opcionalmente inclua uma observação para o movimento.`,
     async (params: z.infer<typeof UpdateStockInputSchema>) => {
       try {
         const { idProduto, ...data } = params;
-        await apiPut(`/estoques/${idProduto}`, data);
+        await apiPut(`/estoque/${idProduto}`, data);
         const action = params.quantidade >= 0 ? "adicionada" : "removida";
         return {
           content: [{ type: "text", text: formatSuccess(`Quantidade ${action} do estoque do produto ${idProduto}`) }],
