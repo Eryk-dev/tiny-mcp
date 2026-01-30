@@ -199,6 +199,20 @@ async function handleRequest(
     return;
   }
 
+  // Root endpoint
+  if (url.pathname === "/" && req.method === "GET") {
+    sendJson(res, 200, {
+      service: "tiny-mcp-server",
+      version: "1.0.0",
+      status: "running",
+      endpoints: {
+        health: "/health",
+        mcp: "/mcp"
+      }
+    });
+    return;
+  }
+
   // Health check endpoint
   if (url.pathname === "/health" && req.method === "GET") {
     sendJson(res, 200, {
