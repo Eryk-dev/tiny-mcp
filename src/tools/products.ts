@@ -65,15 +65,14 @@ const CreateProductInputSchema = z.object({
 
 const UpdateProductInputSchema = z.object({
   idProduto: z.number().int().positive().describe("ID do produto"),
-  nome: z.string().min(1).max(200).optional().describe("Nome do produto"),
+  nome: z.string().min(1).max(200).optional().describe("Nome/descrição do produto"),
   sku: z.string().max(50).optional().describe("SKU do produto"),
   preco: z.number().min(0).optional().describe("Preço de venda"),
   precoCusto: z.number().min(0).optional().describe("Preço de custo"),
   unidade: z.string().max(10).optional().describe("Unidade"),
   gtin: z.string().max(20).optional().describe("Código de barras"),
   ncm: z.string().max(10).optional().describe("Código NCM"),
-  descricao: z.string().max(5000).optional().describe("Descrição completa"),
-  descricaoCurta: z.string().max(500).optional().describe("Descrição curta"),
+  descricaoComplementar: z.string().max(5000).optional().describe("Descrição complementar"),
   situacao: z.enum(["ativo", "inativo"]).optional().describe("Situação do produto"),
   localizacao: z.string().max(100).optional().describe("Localização no estoque")
 }).strict();
@@ -391,8 +390,22 @@ Campos não informados mantêm seus valores atuais.`,
     },
     async (params: z.infer<typeof UpdateProductInputSchema>) => {
       try {
-        const { idProduto, localizacao, ...rest } = params;
-        const data: Record<string, unknown> = { ...rest };
+        const { idProduto, localizacao, nome, sku, descricaoComplementar, ...rest } = params;
+
+        // Buscar produto atual para obter campos obrigatórios
+        const current = await apiGet<Product>(`/produtos/${idProduto}`);
+
+        // Montar dados com campos obrigatórios (descricao e sku)
+        const data: Record<string, unknown> = {
+          descricao: nome ?? current.descricao,
+          sku: sku ?? current.sku,
+          ...rest,
+        };
+
+        // Campo descricaoComplementar é opcional
+        if (descricaoComplementar !== undefined) {
+          data.descricaoComplementar = descricaoComplementar;
+        }
 
         // Localização vai dentro do objeto estoque
         if (localizacao !== undefined) {
