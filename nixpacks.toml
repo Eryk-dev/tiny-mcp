@@ -12,4 +12,4 @@ cmd = "npm start"
 
 [variables]
 NODE_ENV = "production"
-PORT = "6024"
+PORT = "3000"
